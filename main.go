@@ -64,7 +64,6 @@ func calculateMultiLoan(requests []LoanRequest) []MultiLoanDetails {
 	for i, request := range requests {
 		monthlyInterestRate := request.InterestRate / 100 / 12
 		principal := request.Principal
-		beforePrincipal := principal
 		totalPaid := 0.0
 		month := 1
 
@@ -72,21 +71,21 @@ func calculateMultiLoan(requests []LoanRequest) []MultiLoanDetails {
 			interest := principal * monthlyInterestRate
 			thisPayment := min(request.MonthlyPayment, principal+interest)
 			principalReduction := thisPayment - interest
-			beforePrincipal = principal
-			principal -= principalReduction
 			totalPaid += thisPayment
 
 			loans[i] = append(loans[i], LoanDetails{
 				Month:              month,
 				Year:               float64(month) / 12,
-				OriginalPrincipal:  beforePrincipal,
-				RemainingPrincipal: principal,
+				OriginalPrincipal:  principal,
+				RemainingPrincipal: principal - principalReduction,
 				InterestRate:       request.InterestRate,
 				MonthlyPayment:     thisPayment,
 				Interest:           interest,
 				PrincipalReduction: principalReduction,
 				TotalPaid:          totalPaid,
 			})
+
+			principal -= principalReduction
 			month++
 		}
 
@@ -95,10 +94,17 @@ func calculateMultiLoan(requests []LoanRequest) []MultiLoanDetails {
 		}
 	}
 
+	return aggregateLoanDetails(loans, maxMonths)
+}
+
+func aggregateLoanDetails(loans [][]LoanDetails, maxMonths int) []MultiLoanDetails {
 	multiLoanDetails := make([]MultiLoanDetails, maxMonths)
+	totalPaidPerLoan := make([]float64, len(loans))
+
 	for month := 0; month < maxMonths; month++ {
 		var totalMonthlyPayment, totalInterest, totalPrincipalReduction, totalOriginalPrincipal, totalRemainingPrincipal, totalPaid float64
-		for _, loan := range loans {
+
+		for i, loan := range loans {
 			if month < len(loan) {
 				detail := loan[month]
 				totalMonthlyPayment += detail.MonthlyPayment
@@ -106,8 +112,9 @@ func calculateMultiLoan(requests []LoanRequest) []MultiLoanDetails {
 				totalPrincipalReduction += detail.PrincipalReduction
 				totalOriginalPrincipal += detail.OriginalPrincipal
 				totalRemainingPrincipal += detail.RemainingPrincipal
-				totalPaid += detail.TotalPaid
+				totalPaidPerLoan[i] = detail.TotalPaid
 			}
+			totalPaid += totalPaidPerLoan[i]
 		}
 
 		multiLoanDetails[month] = MultiLoanDetails{
